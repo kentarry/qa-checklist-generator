@@ -1051,3 +1051,224 @@ body {
   transition: all var(--transition);
 }
 
+/* ── Chip Grid ── */
+.chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip-grid-wide {
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Chip Button ── */
+.chip-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.chip {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: inherit;
+  color: #9590a0;
+  background: #181b26;
+  border: 1.5px solid #262a3a;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.chip:hover {
+  background: #1e2130;
+  border-color: #3a3e52;
+  color: #c0bcc8;
+}
+
+.chip-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.chip-check {
+  color: #10b981;
+  font-weight: 700;
+}
+
+/* Active state per mode */
+.chip.chip-active.mode-slot {
+  background: rgba(74, 108, 247, 0.12);
+  border-color: rgba(74, 108, 247, 0.4);
+  color: #a8bcff;
+}
+
+.chip.chip-active.mode-fishing {
+  background: rgba(6, 182, 212, 0.12);
+  border-color: rgba(6, 182, 212, 0.4);
+  color: #67e8f9;
+}
+
+.chip.chip-active.mode-casual {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.4);
+  color: #d8b4fe;
+}
+
+/* Wide chip (game types) */
+.chip.chip-wide {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 16px;
+  white-space: normal;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.chip-desc {
+  font-size: 12px;
+  font-weight: 400;
+  color: #5e5a6e;
+  line-height: 1.5;
+  display: block;
+}
+
+.chip.chip-active .chip-desc {
+  color: #8888a8;
+}
+
+/* Tooltip (for non-wide feature chips) */
+.chip-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #d0cdd8;
+  background: #1c1f2e;
+  border: 1px solid #2a2e40;
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  white-space: normal;
+  width: max-content;
+  max-width: 280px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.chip-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #2a2e40;
+}
+
+.chip-tooltip-wrap:hover .chip-tooltip {
+  display: block;
+}
+
+/* ── Image Preview Grid ── */
+.img-preview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.img-preview-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #262a3a;
+}
+
+.img-preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.img-preview-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  border: none;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Upload Zones ── */
+.uploaded-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #181b26;
+  border-radius: var(--radius-sm);
+  border: 1px solid #262a3a;
+}
+
+.uploaded-file-name {
+  font-size: 14px;
+  color: #10b981;
+}
+
+.uploaded-file-remove {
+  font-size: 12px;
+  color: #ef4444;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ── Form Grid ── */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  
+  .chip {
+    font-size: 14px;
+    padding: 10px 14px;
+  }
+
+  .chip.chip-wide {
+    padding: 12px 14px;
+  }
+
+  .chip-icon {
+    font-size: 16px;
+  }
+}

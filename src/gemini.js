@@ -4,8 +4,8 @@
  * Old models (2.0-flash, 1.5-flash, 1.5-pro) are deprecated.
  */
 export const GEMINI_MODELS = [
+  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", desc: "速度與品質兼顧，免費額度每日 250 次（推薦）", tier: "免費" },
   { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite", desc: "最快速度、最低延遲，免費額度最高（每日 1000 次）", tier: "免費" },
-  { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", desc: "速度與品質兼顧，免費額度每日 250 次", tier: "免費" },
   { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", desc: "最高品質深度分析，免費額度每日 100 次", tier: "免費（額度較少）" },
 ];
 
@@ -47,7 +47,7 @@ function parseFriendlyError(status, errObj) {
  * @param {string} model - Gemini model ID
  * @returns {Promise<Array>} - Array of sections with items
  */
-export async function callGemini(apiKey, prompt, model = "gemini-2.5-flash-lite") {
+export async function callGemini(apiKey, prompt, model = "gemini-2.5-flash") {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const resp = await fetch(url, {

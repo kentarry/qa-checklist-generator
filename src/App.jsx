@@ -19,7 +19,7 @@ export default function App() {
   const [resultFile, setResultFile] = useState("");
   const [error, setError] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-lite");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
 
   const gnRef = useRef(null);
   const pnRef = useRef(null);
@@ -79,8 +79,6 @@ export default function App() {
     setStatus("loading");
     setError("");
 
-    const gn = gnRef.current?.value || "";
-    const pn = pnRef.current?.value || "";
     const pay = payRef.current?.value || "";
     const jp = jpRef.current?.value || "";
     const dev = devRef.current?.value || "";
@@ -103,8 +101,8 @@ export default function App() {
 
       const prompt = buildPrompt({
         mode,
-        gameName: gn,
-        platform: pn,
+        gameName: "",
+        platform: "",
         gameType: typeLabel,
         paylines: pay,
         features: featList,
@@ -182,14 +180,14 @@ export default function App() {
 
   // Mode-specific labels
   const modeLabels = {
-    slot: { gameName: "遊戲名稱", gameNamePh: "例：魔龍狂怒", platform: "平台", platformPh: "例：滿貫大亨", devTitle: "研發 / 主辦需求", devSub: "貼上規格書或驗收需求" },
-    fishing: { gameName: "遊戲名稱", gameNamePh: "例：深海獵魚", platform: "平台", platformPh: "例：捕魚達人", devTitle: "研發 / 主辦需求", devSub: "貼上武器設定、魚種表或規格需求" },
-    casual: { gameName: "遊戲名稱", gameNamePh: "例：幸運骰子", platform: "平台", platformPh: "例：歡樂棋牌", devTitle: "研發 / 主辦需求", devSub: "貼上遊戲規則或驗收需求" },
+    slot: { devTitle: "研發 / 主辦需求（選填）", devSub: "貼上規格書或驗收需求，沒有可跳過" },
+    fishing: { devTitle: "研發 / 主辦需求（選填）", devSub: "貼上武器設定、魚種表或規格需求，沒有可跳過" },
+    casual: { devTitle: "研發 / 主辦需求（選填）", devSub: "貼上遊戲規則或驗收需求，沒有可跳過" },
   };
   const ml = modeLabels[mode];
 
   const devPlaceholders = {
-    slot: "例：\n1. 盤面 3x5 消除類 SLOT\n2. 消除 1/2/3/4 次獲得乘倍 x1/x2/x3/x5\n3. 3 個 SCATTER 觸發 10 局免費遊戲\n4. WILD 可替代除 SCATTER 以外所有符號\n5. 購買免遊花費 100 倍 BET",
+    slot: "例：\n1. 盤面 3x5 消除類 SLOT\n2. 消除 1/2/3/4 次獲得乘倍 x1/x2/x3/x5\n3. 3 個 SCATTER 觸發 10 局 Free Game\n4. WILD 可替代除 SCATTER 以外所有符號\n5. 購買 Free Game 花費 100 倍 BET",
     fishing: "例：\n1. 砲台等級 1-10，每級消耗倍率不同\n2. Boss 每 3 分鐘出現一次\n3. 特殊魚種：炸彈魚範圍殺傷、電鰻連鎖\n4. 鎖定功能需 VIP 等級 3+ 開啟\n5. 4 人座位同場",
     casual: "例：\n1. 猜大小，52 張牌不含鬼牌\n2. 連續猜對可加倍，最高 5 連\n3. A 視為最小，K 視為最大\n4. 平手時自動歸還押注\n5. 含幸運轉盤附加玩法",
   };
@@ -307,15 +305,20 @@ export default function App() {
         )}
       </Section>
 
-      {/* Game Info */}
-      <Section color={mc.main} title="遊戲資訊">
-        <div className="form-grid-2">
-          <div><Label>{ml.gameName}</Label><TextInput placeholder={ml.gameNamePh} inputRef={gnRef} /></div>
-          <div><Label>{ml.platform}</Label><TextInput placeholder={ml.platformPh} inputRef={pnRef} /></div>
+      {/* Game Type */}
+      <Section color={mc.light} title="遊戲類型" sub="選擇最接近的類型，幫助 AI 更精準地產出檢驗項目">
+        <div className="chip-grid chip-grid-wide">
+          {gameTypes.map((g) => (
+            <Chip key={g.id} label={g.label} icon={g.icon} desc={g.desc} wide
+              active={gt === g.id}
+              onClick={() => setGt((p) => (p === g.id ? "" : g.id))}
+              mode={mode}
+            />
+          ))}
         </div>
         {mode === "slot" && (
-          <div style={{ marginTop: "10px" }}>
-            <Label>賠付線（選填）</Label>
+          <div style={{ marginTop: "12px" }}>
+            <Label>賠付線數（選填）</Label>
             <TextInput placeholder="例：50" inputRef={payRef} style={{ maxWidth: "160px" }} />
           </div>
         )}
@@ -330,21 +333,10 @@ export default function App() {
         />
       </Section>
 
-      {/* Game Type */}
-      <Section color={mc.light} title="遊戲類型" sub="選擇最接近的類型，幫助 AI 更精準地產出檢驗項目">
-        <div className="chip-grid">
-          {gameTypes.map((g) => (
-            <Chip key={g.id} label={g.label} icon={g.icon} desc={g.desc} wide
-              active={gt === g.id}
-              onClick={() => setGt((p) => (p === g.id ? "" : g.id))}
-              mode={mode}
-            />
-          ))}
-        </div>
-      </Section>
+
 
       {/* Features */}
-      <Section color={mc.light} title="功能特徵" sub="勾選遊戲包含的功能，滑鼠懸停可查看說明">
+      <Section color={mc.light} title="功能特徵" sub="勾選遊戲包含的功能，滑鼠懸停可查看說明（可複選）">
         <div className="chip-grid">
           {features.map((f) => (
             <Chip key={f.id} label={f.label} icon={f.icon} desc={f.desc}
