@@ -19,7 +19,7 @@ export default function App() {
   const [resultFile, setResultFile] = useState("");
   const [error, setError] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("gemini-2.0-flash");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-lite");
 
   const gnRef = useRef(null);
   const pnRef = useRef(null);
