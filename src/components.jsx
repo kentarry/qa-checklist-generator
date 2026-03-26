@@ -47,7 +47,7 @@ export function Chip({ label, icon, desc, active, onClick, wide, mode }) {
   );
 }
 
-export function Section({ color, title, sub, children, defaultOpen = true }) {
+export function Section({ color, title, sub, children, defaultOpen = true, badge }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
@@ -55,6 +55,7 @@ export function Section({ color, title, sub, children, defaultOpen = true }) {
       <div className="section-header" onClick={() => setOpen(!open)}>
         <div className="section-indicator" style={{ background: color }} />
         <span className="section-title">{title}</span>
+        {badge && <span className="section-badge">{badge}</span>}
         <span className={`section-toggle ${open ? "open" : ""}`}>▼</span>
       </div>
       {sub && <div className="section-sub">{sub}</div>}
@@ -79,6 +80,43 @@ export function TabBar({ tabs, activeId, onChange }) {
           <span className="tab-icon">{tab.icon}</span>
           <span>{tab.label}</span>
         </button>
+      ))}
+    </div>
+  );
+}
+
+export function TemplateCard({ template, active, onClick, mode }) {
+  return (
+    <button
+      className={`template-card ${active ? `template-active mode-${mode}` : ""}`}
+      onClick={onClick}
+    >
+      <span className="template-icon">{template.icon}</span>
+      <div className="template-info">
+        <span className="template-label">{template.label}</span>
+        <span className="template-desc">{template.desc}</span>
+      </div>
+      {active && <span className="template-check">✓</span>}
+    </button>
+  );
+}
+
+export function StepIndicator({ current, mode }) {
+  const steps = [
+    { num: 1, label: "選擇類型" },
+    { num: 2, label: "設定資訊" },
+    { num: 3, label: "產出下載" },
+  ];
+  return (
+    <div className="step-indicator">
+      {steps.map((s, i) => (
+        <React.Fragment key={s.num}>
+          <div className={`step-item ${current >= s.num ? `step-active mode-${mode}` : ""}`}>
+            <span className="step-num">{s.num}</span>
+            <span className="step-label">{s.label}</span>
+          </div>
+          {i < steps.length - 1 && <div className={`step-line ${current > s.num ? `step-line-active mode-${mode}` : ""}`} />}
+        </React.Fragment>
       ))}
     </div>
   );

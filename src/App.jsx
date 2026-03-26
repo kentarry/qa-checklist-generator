@@ -1,9 +1,9 @@
 import React, { useState, useRef, useCallback } from "react";
-import { GAME_MODES, PLATFORMS, getGameTypes, getFeatures } from "./constants";
+import { GAME_MODES, PLATFORMS, getGameTypes, getFeatures, QUICK_TEMPLATES } from "./constants";
 import { getModeColors } from "./theme";
-import { TextInput, TextArea, Chip, Section, Label, TabBar } from "./components";
+import { TextInput, TextArea, Chip, Section, Label, TabBar, TemplateCard, StepIndicator } from "./components";
 import { callGemini, buildPrompt, GEMINI_MODELS } from "./gemini";
-import { readExcelItems, buildAndDownloadExcel } from "./excel";
+import { readExcelItems, analyzeExcelStructure, buildAndDownloadExcel } from "./excel";
 
 export default function App() {
   const [mode, setMode] = useState("slot");
@@ -13,16 +13,16 @@ export default function App() {
   const [hasXl, setHasXl] = useState(false);
   const [xlName, setXlName] = useState("");
   const [xlData, setXlData] = useState(null);
+  const [xlStructure, setXlStructure] = useState(null);
   const [imgs, setImgs] = useState([]);
-  const [status, setStatus] = useState("idle"); // idle | loading | done | error
+  const [status, setStatus] = useState("idle");
   const [resultMsg, setResultMsg] = useState("");
   const [resultFile, setResultFile] = useState("");
   const [error, setError] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash-lite");
+  const [activeTemplate, setActiveTemplate] = useState("");
 
-  const gnRef = useRef(null);
-  const pnRef = useRef(null);
   const payRef = useRef(null);
   const jpRef = useRef(null);
   const devRef = useRef(null);
@@ -45,14 +45,38 @@ export default function App() {
     setMode(newMode);
     setGt("");
     setFeat(new Set());
+    setActiveTemplate("");
   }, []);
+
+  const handleTemplateSelect = useCallback((tpl) => {
+    if (activeTemplate === tpl.id) {
+      setActiveTemplate("");
+      setGt("");
+      setFeat(new Set());
+      return;
+    }
+    setActiveTemplate(tpl.id);
+    setGt(tpl.gameType);
+    setFeat(new Set(tpl.features));
+  }, [activeTemplate]);
 
   const handleXlUpload = useCallback((file) => {
     if (!file) return;
     setHasXl(true);
     setXlName(file.name);
     const reader = new FileReader();
-    reader.onload = (e) => setXlData(new Uint8Array(e.target.result));
+    reader.onload = (e) => {
+      const data = new Uint8Array(e.target.result);
+      setXlData(data);
+      // Analyze the structure for format matching
+      try {
+        const structure = analyzeExcelStructure(data);
+        setXlStructure(structure);
+      } catch (err) {
+        console.error("Excel structure analysis failed:", err);
+        setXlStructure(null);
+      }
+    };
     reader.readAsArrayBuffer(file);
   }, []);
 
@@ -113,10 +137,12 @@ export default function App() {
         existingItems,
       });
 
-      const sections = await callGemini(apiKey, prompt, selectedModel);
+      // Pass images to Gemini for visual analysis
+      const imageData = imgs.filter((i) => i.dataUrl && i.type?.startsWith("image/"));
+      const sections = await callGemini(apiKey, prompt, selectedModel, imageData);
 
       const modeLabel = GAME_MODES.find((m) => m.id === mode)?.label || "";
-      const fn = buildAndDownloadExcel(sections, platLabels, gn, modeLabel);
+      const fn = buildAndDownloadExcel(sections, platLabels, "", modeLabel, xlStructure);
       const total = sections.reduce((s, sec) => s + (sec.items?.length || 0), 0);
 
       setResultFile(fn);
@@ -127,49 +153,51 @@ export default function App() {
       setError(e.message || "發生錯誤");
       setStatus("error");
     }
-  }, [mode, gt, feat, plat, xlData, selectedModel]);
+  }, [mode, gt, feat, plat, xlData, xlStructure, imgs, selectedModel]);
 
-  // ── Loading Screen ──
+  // ── Loading ──
   if (status === "loading") {
     return (
-      <div className="status-screen">
-        <div className="loading-spinner" style={{ borderTopColor: mc.main }} />
-        <div className="status-title">AI 正在分析並產生檢驗表...</div>
-        <div style={{ fontSize: "13px", color: "#5e5a6e", marginTop: "6px" }}>
-          根據你的{GAME_MODES.find((m) => m.id === mode)?.label || "遊戲"}資訊
-          {hasXl ? "與既有檢驗單" : ""}，以品檢角度產出補充項目
-        </div>
-        <div style={{ fontSize: "12px", color: "#3d3a4e", marginTop: "14px", animation: "pulse 1.5s ease-in-out infinite" }}>
-          約 10-30 秒...
+      <div className="app-container">
+        <div className="status-screen">
+          <div className="loading-spinner" style={{ borderTopColor: mc.main }} />
+          <div className="status-title">AI 正在分析並產生檢驗表...</div>
+          <div className="status-sub-text">
+            根據你的{GAME_MODES.find((m) => m.id === mode)?.label || "遊戲"}資訊
+            {hasXl ? "與既有檢驗單" : ""}{imgs.length > 0 ? "及遊戲截圖" : ""}，分析高風險盲區
+          </div>
+          <div className="status-pulse">約 10-20 秒...</div>
         </div>
       </div>
     );
   }
 
-  // ── Done Screen ──
+  // ── Done ──
   if (status === "done") {
     return (
-      <div className="status-screen">
-        <div className="success-icon">✓</div>
-        <div className="status-title">檢驗表已下載</div>
-        <div className="status-file" style={{ color: mc.light }}>{resultFile}</div>
-        <div className="status-msg">{resultMsg}</div>
-        {hasXl && (
-          <div className="warning-box">
-            產出的是獨立的補充檢驗表，已根據「{xlName}」的內容去重。原始檔案未被修改。
+      <div className="app-container">
+        <div className="status-screen">
+          <div className="success-icon">✓</div>
+          <div className="status-title">檢驗表已下載</div>
+          <div className="status-file" style={{ color: mc.light }}>{resultFile}</div>
+          <div className="status-msg">{resultMsg}</div>
+          {hasXl && (
+            <div className="warning-box">
+              產出的是獨立的補充檢驗表，已沿用「{xlName}」的欄位格式並去重。原始檔案未被修改。
+            </div>
+          )}
+          <div className="status-actions">
+            <button className="btn-secondary" onClick={() => setStatus("idle")}>
+              ← 返回修改
+            </button>
+            <button
+              className={`btn-accent mode-${mode}`}
+              style={{ background: mc.main }}
+              onClick={handleGenerate}
+            >
+              再次產生 ↻
+            </button>
           </div>
-        )}
-        <div className="status-actions">
-          <button className="btn-secondary" onClick={() => setStatus("idle")}>
-            ← 返回修改
-          </button>
-          <button
-            className={`btn-accent mode-${mode}`}
-            style={{ background: mc.main }}
-            onClick={handleGenerate}
-          >
-            再次產生 ↻
-          </button>
         </div>
       </div>
     );
@@ -177,20 +205,15 @@ export default function App() {
 
   const gameTypes = getGameTypes(mode);
   const features = getFeatures(mode);
-
-  // Mode-specific labels
-  const modeLabels = {
-    slot: { devTitle: "研發 / 主辦需求（選填）", devSub: "貼上規格書或驗收需求，沒有可跳過" },
-    fishing: { devTitle: "研發 / 主辦需求（選填）", devSub: "貼上武器設定、魚種表或規格需求，沒有可跳過" },
-    casual: { devTitle: "研發 / 主辦需求（選填）", devSub: "貼上遊戲規則或驗收需求，沒有可跳過" },
-  };
-  const ml = modeLabels[mode];
+  const templates = QUICK_TEMPLATES[mode] || [];
 
   const devPlaceholders = {
-    slot: "例：\n1. 盤面 3x5 消除類 SLOT\n2. 消除 1/2/3/4 次獲得乘倍 x1/x2/x3/x5\n3. 3 個 SCATTER 觸發 10 局 Free Game\n4. WILD 可替代除 SCATTER 以外所有符號\n5. 購買 Free Game 花費 100 倍 BET",
-    fishing: "例：\n1. 砲台等級 1-10，每級消耗倍率不同\n2. Boss 每 3 分鐘出現一次\n3. 特殊魚種：炸彈魚範圍殺傷、電鰻連鎖\n4. 鎖定功能需 VIP 等級 3+ 開啟\n5. 4 人座位同場",
-    casual: "例：\n1. 猜大小，52 張牌不含鬼牌\n2. 連續猜對可加倍，最高 5 連\n3. A 視為最小，K 視為最大\n4. 平手時自動歸還押注\n5. 含幸運轉盤附加玩法",
+    slot: "例：\n1. 盤面 3x5 消除類 SLOT\n2. 3 個 SCATTER 觸發 10 局 Free Game\n3. WILD 可替代除 SCATTER 以外所有符號",
+    fishing: "例：\n1. 砲台等級 1-10\n2. Boss 每 3 分鐘出現一次\n3. 特殊魚種：炸彈魚範圍殺傷",
+    casual: "例：\n1. 猜大小，52 張牌不含鬼牌\n2. 連續猜對可加倍，最高 5 連\n3. 平手時自動歸還押注",
   };
+
+  const currentStep = gt || feat.size > 0 ? 2 : 1;
 
   // ── Main Form ──
   return (
@@ -202,8 +225,11 @@ export default function App() {
           QA CHECKLIST GENERATOR
         </div>
         <div className="header-title">遊戲測試檢驗表</div>
-        <div className="header-sub">選擇遊戲類別 → 填寫資訊 → AI 分析 → 下載 Excel</div>
+        <div className="header-sub">選擇遊戲類別 → 設定資訊 → AI 分析盲區 → 下載 Excel</div>
       </div>
+
+      {/* Step Indicator */}
+      <StepIndicator current={currentStep} mode={mode} />
 
       {/* Tab Bar */}
       <TabBar tabs={GAME_MODES} activeId={mode} onChange={handleModeChange} />
@@ -211,11 +237,11 @@ export default function App() {
       {/* Error */}
       {error && <div className="error-box">{error.split('\n').map((line, i) => <div key={i}>{line}</div>)}</div>}
 
-      {/* API Key & Model */}
-      <Section color="#fbbf24" title="Gemini API 設定" sub="前往 aistudio.google.com → Get API Key → Create">
+      {/* ─ 1. API Key ─ */}
+      <Section color="#fbbf24" title="API Key 設定" sub="前往 aistudio.google.com → Get API Key" defaultOpen={true}>
         <div className="api-key-row">
           <TextInput
-            placeholder="貼上你的 Gemini API Key"
+            placeholder="貼上 Gemini API Key"
             inputRef={apiKeyRef}
             type={showKey ? "text" : "password"}
           />
@@ -223,10 +249,9 @@ export default function App() {
             {showKey ? "隱藏" : "顯示"}
           </button>
         </div>
-        <div className="model-selector">
-          <Label>AI 模型</Label>
+        <div className="model-row">
           <select
-            className="form-select"
+            className="form-select form-select-compact"
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
           >
@@ -242,8 +267,8 @@ export default function App() {
         </div>
       </Section>
 
-      {/* Excel Upload */}
-      <Section color="#10b981" title="匯入既有 Excel（選填）" sub="上傳現有檢驗單，AI 會讀取內容避免產出重複項目">
+      {/* ─ 2. Upload Existing Excel (top, clearly optional) ─ */}
+      <Section color="#10b981" title="📊 匯入既有檢驗單（選填）" sub="上傳現有 Excel，AI 會避免產出重複項目，並沿用你的欄位格式" defaultOpen={true}>
         {!hasXl ? (
           <div
             className="upload-zone upload-zone-green"
@@ -253,8 +278,9 @@ export default function App() {
           >
             <div className="upload-icon">📊</div>
             <div className="upload-text">
-              拖曳或<span className="upload-link upload-link-green">點擊上傳</span> .xlsx
+              拖曳或<span className="upload-link upload-link-green">點擊上傳</span> .xlsx 檔案
             </div>
+            <div className="upload-hint">上傳後產出的 Excel 會沿用你的表頭欄位格式</div>
             <input
               ref={xlInputRef} type="file" accept=".xlsx,.xls"
               className="hidden-input"
@@ -263,29 +289,37 @@ export default function App() {
           </div>
         ) : (
           <div className="uploaded-file">
-            <span className="uploaded-file-name">✓ {xlName}</span>
+            <div className="uploaded-file-info">
+              <span className="uploaded-file-name">✓ {xlName}</span>
+              {xlStructure && xlStructure.headers.length > 0 && (
+                <span className="uploaded-file-meta">
+                  偵測到 {xlStructure.headers.length} 欄：{xlStructure.headers.filter(h => h).slice(0, 4).join("、")}{xlStructure.headers.length > 4 ? "..." : ""}
+                </span>
+              )}
+            </div>
             <button
               className="uploaded-file-remove"
-              onClick={() => { setHasXl(false); setXlName(""); setXlData(null); }}
+              onClick={() => { setHasXl(false); setXlName(""); setXlData(null); setXlStructure(null); }}
             >移除</button>
           </div>
         )}
       </Section>
 
-      {/* Image/Video Upload */}
-      <Section color="#fb923c" title="上傳截圖 / 影片（選填）" sub="提供畫面幫助 AI 更精準判斷">
+      {/* ─ 3. Screenshot / Media Upload ─ */}
+      <Section color="#fb923c" title="📷 上傳遊戲截圖（選填）" sub="提供遊戲畫面讓 AI 看到實際介面，產出更精準的檢驗項目" defaultOpen={true}>
         <div
           className="upload-zone"
           onClick={() => imgInputRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
           onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleImgUpload(e.dataTransfer?.files); }}
         >
-          <div className="upload-icon">📁</div>
+          <div className="upload-icon">📷</div>
           <div className="upload-text">
-            拖曳或<span className="upload-link upload-link-orange">點擊上傳</span>
+            拖曳或<span className="upload-link upload-link-orange">點擊上傳</span> 圖片
           </div>
+          <div className="upload-hint">支援 JPG/PNG，AI 會分析截圖中的遊戲介面元素</div>
           <input
-            ref={imgInputRef} type="file" multiple accept="image/*,video/*"
+            ref={imgInputRef} type="file" multiple accept="image/*"
             className="hidden-input"
             onChange={(e) => { handleImgUpload(e.target?.files); if (e.target) e.target.value = ""; }}
           />
@@ -295,9 +329,10 @@ export default function App() {
             {imgs.map((f, i) => (
               <div key={i} className="img-preview-item">
                 {f.dataUrl
-                  ? <img src={f.dataUrl} alt="" />
-                  : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontSize: "18px" }}>🎬</span></div>
+                  ? <img src={f.dataUrl} alt={f.name} />
+                  : <div className="img-preview-placeholder"><span>🎬</span></div>
                 }
+                <div className="img-preview-name">{f.name}</div>
                 <button className="img-preview-remove" onClick={() => setImgs((p) => p.filter((_, j) => j !== i))}>✕</button>
               </div>
             ))}
@@ -305,43 +340,52 @@ export default function App() {
         )}
       </Section>
 
-      {/* Game Type */}
-      <Section color={mc.light} title="遊戲類型" sub="選擇最接近的類型，幫助 AI 更精準地產出檢驗項目">
-        <div className="chip-grid chip-grid-wide">
+      {/* ─ 4. Quick Templates ─ */}
+      <Section color={mc.light} title="⚡ 快速範本" sub="點擊範本一鍵帶入遊戲類型與功能特徵，省去手動勾選" badge={activeTemplate ? "已選取" : ""}>
+        <div className="template-grid">
+          {templates.map((tpl) => (
+            <TemplateCard
+              key={tpl.id}
+              template={tpl}
+              active={activeTemplate === tpl.id}
+              onClick={() => handleTemplateSelect(tpl)}
+              mode={mode}
+            />
+          ))}
+        </div>
+      </Section>
+
+      {/* ─ 5. Game Type ─ */}
+      <Section color={mc.light} title="遊戲類型" sub="選擇最接近的類型（單選）" badge={gt ? "✓" : ""}>
+        <div className="chip-grid chip-grid-type">
           {gameTypes.map((g) => (
             <Chip key={g.id} label={g.label} icon={g.icon} desc={g.desc} wide
               active={gt === g.id}
-              onClick={() => setGt((p) => (p === g.id ? "" : g.id))}
+              onClick={() => { setGt((p) => (p === g.id ? "" : g.id)); setActiveTemplate(""); }}
               mode={mode}
             />
           ))}
         </div>
         {mode === "slot" && (
-          <div style={{ marginTop: "12px" }}>
-            <Label>賠付線數（選填）</Label>
-            <TextInput placeholder="例：50" inputRef={payRef} style={{ maxWidth: "160px" }} />
+          <div className="paylines-row">
+            <div className="paylines-label">
+              <span className="paylines-icon">🎯</span>
+              <span>賠付線數</span>
+              <span className="paylines-optional">（選填）</span>
+            </div>
+            <TextInput placeholder="輸入賠付線數，例：20、50、243、1024" inputRef={payRef} style={{ maxWidth: "320px" }} />
+            <div className="paylines-hint">常見值：20 線、50 線、243 ways、1024 ways、Megaways (最高 117649)</div>
           </div>
         )}
       </Section>
 
-      {/* Dev Requirements */}
-      <Section color="#f472b6" title={ml.devTitle} sub={ml.devSub}>
-        <TextArea
-          placeholder={devPlaceholders[mode]}
-          inputRef={devRef}
-          rows={5}
-        />
-      </Section>
-
-
-
-      {/* Features */}
-      <Section color={mc.light} title="功能特徵" sub="勾選遊戲包含的功能，滑鼠懸停可查看說明（可複選）">
-        <div className="chip-grid">
+      {/* ─ 6. Features ─ */}
+      <Section color={mc.light} title="功能特徵" sub="勾選遊戲包含的功能（可複選，懸停查看說明）" badge={feat.size > 0 ? `${feat.size} 項` : ""}>
+        <div className="chip-grid chip-grid-features">
           {features.map((f) => (
             <Chip key={f.id} label={f.label} icon={f.icon} desc={f.desc}
               active={feat.has(f.id)}
-              onClick={() => tog(setFeat, f.id)}
+              onClick={() => { tog(setFeat, f.id); setActiveTemplate(""); }}
               mode={mode}
             />
           ))}
@@ -353,8 +397,8 @@ export default function App() {
         )}
       </Section>
 
-      {/* Platforms */}
-      <Section color="#fbbf24" title="支援平台">
+      {/* ─ 7. Platforms ─ */}
+      <Section color="#fbbf24" title="支援平台" badge={`${plat.size} 個`}>
         <div className="chip-grid">
           {PLATFORMS.map((p) => (
             <Chip key={p.id} label={p.label} icon=""
@@ -366,19 +410,34 @@ export default function App() {
         </div>
       </Section>
 
-      {/* Extra Items */}
-      <Section color="#5e5a6e" title="額外指定項目（選填）" sub="一行一個，指定你特別想要 AI 關注的測試面向">
+      {/* ─ 8. Supplemental (collapsed) ─ */}
+      <Section color="#5e5a6e" title="補充說明（選填）" sub="研發需求或額外指定關注項目" defaultOpen={false}>
+        <Label>研發 / 主辦需求</Label>
         <TextArea
-          placeholder={"例：\nVIP 加乘倍率正確\n斷線重連後遊戲狀態恢復"}
-          inputRef={extRef}
-          rows={3}
+          placeholder={devPlaceholders[mode]}
+          inputRef={devRef}
+          rows={4}
         />
+
+        <div style={{ marginTop: "14px" }}>
+          <Label>額外關注項目（一行一個）</Label>
+          <TextArea
+            placeholder={"例：\nVIP 加乘倍率正確\n斷線重連後遊戲狀態恢復"}
+            inputRef={extRef}
+            rows={2}
+          />
+        </div>
       </Section>
 
       {/* Submit */}
       <button className={`btn-primary mode-${mode}`} onClick={handleGenerate}>
-        產生檢驗表並下載 ↓
+        🚀 產生檢驗表並下載
       </button>
+
+      {/* Footer hint */}
+      <div className="footer-hint">
+        💡 使用 Flash-Lite 模型最省額度（每日 1000 次免費）
+      </div>
     </div>
   );
 }
